@@ -63,6 +63,18 @@ async function run() {
             res.status(500).send({ message: 'Failed to fetch tutors data' });
         }
 
+        // Tutor details
+        try {
+            app.get('/tutors/:id', async (req, res) => {
+                const { id } = req.params
+                const result = await allTutors.findOne({ _id: new ObjectId(id) })
+                res.send(result)
+            })
+        }
+        catch {
+            res.status(500).send({ message: 'Failed to fetch tutor details' })
+        }
+
         await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
     } finally {
