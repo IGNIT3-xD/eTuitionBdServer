@@ -1,7 +1,7 @@
 const express = require('express')
 const cors = require('cors')
 require('dotenv').config()
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
 const app = express()
 const port = process.env.PORT || 5000
@@ -27,7 +27,7 @@ async function run() {
         const allTuitions = db.collection('all_tuitions');
         const allTutors = db.collection('all_tutors')
 
-        // Roues
+        // Routes
         // Get all tuitions
         try {
             app.get('/tuitions', async (req, res) => {
@@ -37,6 +37,18 @@ async function run() {
         }
         catch {
             res.status(500).send({ message: 'Failed to fetch tuitions data' });
+        }
+
+        // Tuition details
+        try {
+            app.get('/tuitions/:id', async (req, res) => {
+                const { id } = req.params
+                const result = await allTuitions.findOne({ _id: new ObjectId(id) })
+                res.send(result)
+            })
+        }
+        catch {
+            res.status(500).send({ message: 'Failed to fetch tuitions details data' })
         }
 
         // Get all tutors
