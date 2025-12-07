@@ -27,11 +27,12 @@ async function run() {
         const allTuitions = db.collection('all_tuitions');
         const allTutors = db.collection('all_tutors')
 
-        // Routes
+        // -----Routes----- //
+
         // Get all tuitions
         try {
             app.get('/tuitions', async (req, res) => {
-                const result = await allTuitions.find().toArray()
+                const result = await allTuitions.find().project({ schedule: 0, startDate: 0, postedBy: 0 }).toArray()
                 res.send(result)
             })
         }
