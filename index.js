@@ -55,7 +55,7 @@ async function run() {
         // Get all tutors
         try {
             app.get('/tutors', async (req, res) => {
-                const result = await allTutors.find().toArray()
+                const result = await allTutors.find().project({ email: 0, about: 0, education: 0 }).toArray()
                 res.send(result)
             })
         }
