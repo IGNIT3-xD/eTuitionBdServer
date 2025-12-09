@@ -97,6 +97,37 @@ async function run() {
             res.status(500).send({ message: 'Failed to post role data' })
         }
 
+        // Get user by their email
+        try {
+            app.get('/users/:email', async (req, res) => {
+                const { email } = req.params
+                const result = await allUsers.findOne({ email })
+                res.send(result)
+            })
+        }
+        catch {
+            res.status(500).send({ message: 'Failed to get user details' })
+        }
+
+        // Update user info
+        try {
+            app.patch('/users/:id', async (req, res) => {
+                const { id } = req.params
+                const {name} = req.body
+                const query = { _id: new ObjectId(id) }
+                const update = {
+                    $set: {
+                        name: name
+                    }
+                }
+                const result = await allUsers.updateOne(query, update)
+                res.send(result)
+            })
+        }
+        catch {
+            res.status(500).send({ message: 'Failed to update user info' })
+        }
+
         await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
     } finally {
