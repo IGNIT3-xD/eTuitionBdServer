@@ -25,7 +25,8 @@ async function run() {
         // Collections
         const db = client.db('eTuitionBd');
         const allTuitions = db.collection('all_tuitions');
-        const allTutors = db.collection('all_tutors')
+        const allTutors = db.collection('all_tutors');
+        const allUsers = db.collection('all_users');
 
         // -----Routes----- //
 
@@ -73,6 +74,27 @@ async function run() {
         }
         catch {
             res.status(500).send({ message: 'Failed to fetch tutor details' })
+        }
+
+        // Post user details
+        try {
+            app.post('/users', async (req, res) => {
+                const user = req.body
+                // console.log(user);
+
+                const isExist = await allUsers.find({ email: user.email }).toArray()
+                // console.log(!!isExist);
+                if (!!isExist) {
+                    // console.log('User already exist');
+                    return res.send({ message: 'User already exist' })
+                }
+
+                const result = await allUsers.insertOne(user)
+                res.send(result)
+            })
+        }
+        catch {
+            res.status(500).send({ message: 'Failed to post role data' })
         }
 
         await client.db("admin").command({ ping: 1 });
