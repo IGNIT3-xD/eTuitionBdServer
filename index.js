@@ -41,6 +41,30 @@ async function run() {
             res.status(500).send({ message: 'Failed to fetch tuitions data' });
         }
 
+        // Post tuition
+        try {
+            app.post('/tuitions', async (req, res) => {
+                const tuition = req.body
+                const result = await allTuitions.insertOne(tuition)
+                res.send(result)
+            })
+        }
+        catch {
+            res.status(500).send({ message: 'Failed to post tuitions data' });
+        }
+
+        // Get tuition by email
+        try {
+            app.get('/my-tuitions', async (req, res) => {
+                const { email } = req.query
+                const result = await allTuitions.find({ "postedBy.email": email }).toArray()
+                res.send(result)
+            })
+        }
+        catch {
+            res.status(500).send({ message: 'Failed to get tuitions data' });
+        }
+
         // Tuition details
         try {
             app.get('/tuitions/:id', async (req, res) => {
@@ -113,7 +137,7 @@ async function run() {
         try {
             app.patch('/users/:id', async (req, res) => {
                 const { id } = req.params
-                const {name} = req.body
+                const { name } = req.body
                 const query = { _id: new ObjectId(id) }
                 const update = {
                     $set: {
