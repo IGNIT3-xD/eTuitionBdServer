@@ -27,6 +27,7 @@ async function run() {
         const allTuitions = db.collection('all_tuitions');
         const allTutors = db.collection('all_tutors');
         const allUsers = db.collection('all_users');
+        const appliedTuitions = db.collection('applied_tuitions')
 
         // -----Routes----- //
 
@@ -179,19 +180,94 @@ async function run() {
             }
         })
 
+        // Applied tuitions
+        app.post('/applied-tuition', async (req, res) => {
+            try {
+                const tutor = req.body
+                const query = { email: tutor.email, tuitionId: tutor.tuitionId }
+                const isExist = await appliedTuitions.findOne(query)
+                if (!!isExist) {
+                    return res.status(400).send({ message: 'Already applied' });
+                }
+
+                tutor.status = 'Pending'
+                // console.log(tutor);
+                const result = await appliedTuitions.insertOne(tutor)
+                res.send(result)
+            }
+            catch {
+                res.status(500).send({ message: 'Failed to post tutor details' })
+            }
+        })
+
+        // Check if tutor already applied
+        app.get('/applied-tuition/check', async (req, res) => {
+            try {
+                const { email, tuitionId } = req.query
+                const exist = await appliedTuitions.findOne({ email, tuitionId })
+                res.send({ applied: !!exist })
+            }
+            catch {
+                res.status(500).send({ message: 'Failed to get tutor' })
+            }
+        })
+
+        // Get application by email
+        app.get('/applied-tuition', async (req, res) => {
+            try {
+                const { email } = req.query
+                const result = await appliedTuitions.find({ email: email }).toArray()
+                res.send(result)
+            }
+            catch {
+                res.status(500).send({ message: 'Failed to get tutor by email' })
+            }
+        })
+
+        // Delete application
+        app.delete('/applied-tuition/:id', async (req, res) => {
+            try {
+                const { id } = req.params
+                const result = await appliedTuitions.deleteOne({ _id: new ObjectId(id) })
+                res.send(result)
+            }
+            catch {
+                res.status(500).send({ message: 'Failed to delete tutor data' })
+            }
+        })
+
+        // Update application
+        app.patch('/applied-tuition/:id', async (req, res) => {
+            try {
+                const { id } = req.params
+                const query = { _id: new ObjectId(id) }
+                const updateDet = req.body
+                // console.log(updateDet);
+                const update = {
+                    $set: updateDet
+                }
+                const result = await appliedTuitions.updateOne(query, update)
+                res.send(result)
+            }
+            catch {
+                res.status(500).send({ message: 'Failed to delete tutor data' })
+            }
+        })
+
+
+        // ---User Releted Apis--- //
+
         // Get user by their email
-        try {
-            app.get('/users/:email', async (req, res) => {
+        app.get('/users/:email', async (req, res) => {
+            try {
                 const { email } = req.params
                 const result = await allUsers.findOne({ email })
                 res.send(result)
-            })
-        }
-        catch {
-            res.status(500).send({ message: 'Failed to get user details' })
-        }
-
-        // ---User Releted Apis--- //
+            }
+            catch {
+                res.status(500).send({ message: 'Failed to get user details' })
+            }
+        })
 
         // Update user info
         app.patch('/users/:id', async (req, res) => {
