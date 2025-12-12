@@ -8,6 +8,7 @@ const port = process.env.PORT || 5000
 
 app.use(express.json())
 app.use(cors())
+const stripe = require('stripe')(process.env.STRIPE_SECRET)
 
 const uri = process.env.URI;
 const client = new MongoClient(uri, {
@@ -27,7 +28,8 @@ async function run() {
         const allTuitions = db.collection('all_tuitions');
         const allTutors = db.collection('all_tutors');
         const allUsers = db.collection('all_users');
-        const appliedTuitions = db.collection('applied_tuitions')
+        const appliedTuitions = db.collection('applied_tuitions');
+        const allPayments = db.collection('all_payments');
 
         // -----Routes----- //
 
@@ -319,6 +321,86 @@ async function run() {
                 res.status(500).send({ message: 'Failed to update user info' })
             }
         })
+
+        // ---Payment releted api's--- //
+
+        // fire payment
+        app.post('/create-checkout-session', async (req, res) => {
+            const paymentInfo = req.body
+            // console.log(paymentInfo);
+
+            const session = await stripe.checkout.sessions.create({
+                line_items: [
+                    {
+                        price_data: {
+                            currency: 'bdt',
+                            product_data: {
+                                name: `Please, pay to ${paymentInfo.name}`
+                            },
+                            unit_amount: paymentInfo.rate * 100,
+                        },
+                        quantity: 1
+                    },
+                ],
+                mode: 'payment',
+                customer_email: paymentInfo.studentEmail,
+                metadata: {
+                    tuitionId: paymentInfo.tuitionId,
+                    postId: paymentInfo.id,
+                    studentEmail: paymentInfo.studentEmail,
+                    tutorEmail: paymentInfo.tutorEmail
+                },
+                success_url: `${process.env.SITE_URL}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+                cancel_url: `${process.env.SITE_URL}/dashboard/payment-cancel`,
+            })
+
+            // console.log(session);
+            res.send({ url: session.url })
+        })
+
+        // If payment success
+        app.patch('/payment-success', async (req, res) => {
+            const { session_id } = req.query
+            const session = await stripe.checkout.sessions.retrieve(session_id);
+            // console.log(session);
+            const transcationId = session.payment_intent;
+            // console.log(transcationId);
+
+            // Prevent double data
+            const isExist = await allPayments.findOne({ transcationId: transcationId })
+            if (!!isExist) {
+                return res.send({ messege: "Already exist" })
+            }
+
+            if (session.payment_status === 'paid') {
+                const id = session.metadata.postId
+                const query = { _id: new ObjectId(id) }
+                const update = {
+                    $set: {
+                        status: 'Paid'
+                    }
+                }
+                const result = await appliedTuitions.updateOne(query, update)
+
+                // Payment collections added
+                const paymentDetails = {
+                    transcationId: transcationId,
+                    amount: session.amount_total / 100,
+                    tutorEmail: session.metadata.tutorEmail,
+                    studentEmail: session.metadata.studentEmail,
+                    tuitionId: session.metadata.tuitionId,
+                    postId: session.metadata.postId,
+                    paymentStatus: session.payment_status,
+                    paidAt: new Date()
+                }
+                const payment = await allPayments.insertOne(paymentDetails)
+
+                res.send(result, payment)
+            }
+
+            res.send({ success: false })
+        })
+
 
         await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
