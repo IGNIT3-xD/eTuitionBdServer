@@ -159,27 +159,6 @@ async function run() {
             }
         })
 
-        // Post user details
-        app.post('/users', async (req, res) => {
-            try {
-                const user = req.body
-                // console.log(user);
-
-                const isExist = await allUsers.find({ email: user.email }).toArray()
-                // console.log(!!isExist);
-                if (!!isExist) {
-                    // console.log('User already exist');
-                    return res.send({ message: 'User already exist' })
-                }
-
-                const result = await allUsers.insertOne(user)
-                res.send(result)
-            }
-            catch {
-                res.status(500).send({ message: 'Failed to post role data' })
-            }
-        })
-
         // Applied tuitions
         app.post('/applied-tuition', async (req, res) => {
             try {
@@ -254,8 +233,61 @@ async function run() {
             }
         })
 
+        // Get tutor application by students post
+        app.get('/applied-tuition/student', async (req, res) => {
+            try {
+                const { studentEmail } = req.query
+                const result = await appliedTuitions.find({ studentEmail: studentEmail }).toArray()
+                res.send(result)
+            }
+            catch {
+                res.status(500).send({ message: 'Failed to get tutor data' })
+            }
+        })
+
+        // Get tutor (for testing purpose)
+        app.get('/applied-tuition/student/:id', async (req, res) => {
+            const result = await appliedTuitions.find({ _id: new ObjectId(req.params.id) }).toArray()
+            res.send(result)
+        })
+
+        // Reject tutor
+        app.patch('/applied-tuition/student/:id', async (req, res) => {
+            try {
+                const query = { _id: new ObjectId(req.params.id) }
+                const updateDoc = {
+                    $set: { status: 'Rejected' }
+                }
+                const result = await appliedTuitions.updateOne(query, updateDoc)
+                res.send(result)
+            }
+            catch {
+                res.status(500).send({ message: 'Failed to update tutor data' })
+            }
+        })
 
         // ---User Releted Apis--- //
+
+        // Post user details
+        app.post('/users', async (req, res) => {
+            try {
+                const user = req.body
+                // console.log(user);
+
+                const isExist = await allUsers.findOne({ email: user.email })
+                // console.log(!!isExist);
+                if (!!isExist) {
+                    // console.log('User already exist');
+                    return res.send({ message: 'User already exist' })
+                }
+
+                const result = await allUsers.insertOne(user)
+                res.send(result)
+            }
+            catch {
+                res.status(500).send({ message: 'Failed to post role data' })
+            }
+        })
 
         // Get user by their email
         app.get('/users/:email', async (req, res) => {
