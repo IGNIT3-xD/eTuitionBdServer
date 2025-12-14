@@ -322,6 +322,36 @@ async function run() {
             }
         })
 
+        // Get all users
+        app.get('/users', async (req, res) => {
+            try {
+                const result = await allUsers.find().toArray()
+                res.send(result)
+            }
+            catch {
+                res.status(500).send({ message: 'Failed to get user' })
+            }
+        })
+
+        // Update role
+        app.patch('/users/role/:id', async (req, res) => {
+            const { role } = req.body
+            // console.log(role);
+            try {
+                const query = { _id: new ObjectId(req.params.id) }
+                const update = {
+                    $set: {
+                        role: role
+                    }
+                }
+                const result = await allUsers.updateOne(query, update)
+                res.send(result)
+            }
+            catch {
+                res.status(500).send({ message: 'Failed to update user role' })
+            }
+        })
+
         // ---Payment releted api's--- //
 
         // fire payment
@@ -366,7 +396,7 @@ async function run() {
             const transcationId = session.payment_intent;
             // console.log(transcationId);
 
-            // Prevent double data
+            // Prevent duplication
             const isExist = await allPayments.findOne({ transcationId: transcationId })
             if (!!isExist) {
                 return res.send({ messege: "Already exist" })
@@ -401,6 +431,28 @@ async function run() {
             res.send({ success: false })
         })
 
+        // Get payment by student email
+        app.get('/payment', async (req, res) => {
+            try {
+                const { email } = req.query
+                const result = await allPayments.find({ studentEmail: email }).toArray()
+                res.send(result)
+            }
+            catch {
+                res.status(400).send({ message: 'Failed to get payment data' })
+            }
+        })
+
+        // Get tutor by tutor email
+        app.get('/ongoing-tuitions', async (req, res) => {
+            try {
+                const { email } = req.query
+                const result = await allPayments.find({ tutorEmail: email }).toArray()
+                res.send(result)
+            } catch {
+                res.status(400).send({ message: 'Failed to get ongoing tuitions data' })
+            }
+        })
 
         await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
