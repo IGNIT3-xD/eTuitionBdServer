@@ -38,7 +38,7 @@ async function run() {
         // Get all tuitions
         app.get('/tuitions', async (req, res) => {
             try {
-                const result = await allTuitions.find().project({ schedule: 0, startDate: 0, postedBy: 0 }).toArray()
+                const result = await allTuitions.find().toArray()
                 res.send(result)
             }
             catch {
@@ -174,6 +174,9 @@ async function run() {
                 tutor.status = 'Pending'
                 // console.log(tutor);
                 const result = await appliedTuitions.insertOne(tutor)
+
+                await allTutors.insertOne(tutor)
+
                 res.send(result)
             }
             catch {
@@ -307,18 +310,29 @@ async function run() {
         app.patch('/users/:id', async (req, res) => {
             try {
                 const { id } = req.params
-                const { name } = req.body
+                const newInfo = req.body
+                // console.log(newInfo);
                 const query = { _id: new ObjectId(id) }
                 const update = {
-                    $set: {
-                        name: name
-                    }
+                    $set: newInfo
                 }
                 const result = await allUsers.updateOne(query, update)
                 res.send(result)
             }
             catch {
                 res.status(500).send({ message: 'Failed to update user info' })
+            }
+        })
+
+        // Delete profile
+        app.delete('/users/:id', async (req, res) => {
+            try {
+                const { id } = req.params
+                const result = await allUsers.deleteOne({ _id: new ObjectId(id) })
+                res.send(result)
+            }
+            catch {
+                res.status(500).send({ message: 'Failed to delete profile' })
             }
         })
 
