@@ -2,6 +2,7 @@ const express = require('express')
 const cors = require('cors')
 require('dotenv').config()
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const admin = require("firebase-admin");
 
 const app = express()
 const port = process.env.PORT || 5000
@@ -10,6 +11,22 @@ app.use(express.json())
 app.use(cors())
 const stripe = require('stripe')(process.env.STRIPE_SECRET)
 
+const verifyFbToken = async (req, res, next) => {
+    const token = req.headers.authorization
+    if (!token) {
+        return res.status(401).send({ messege: "Unauthorize Access" })
+    }
+    try {
+        const idToken = token.split(' ')[1]
+        const decoded = await admin.auth().verifyIdToken(idToken)
+        req.decodedEmail = decoded.email
+        next()
+    }
+    catch {
+        return res.status(401).send({ messege: "Unauthorize Access" })
+    }
+}
+
 const uri = process.env.URI;
 const client = new MongoClient(uri, {
     serverApi: {
@@ -17,6 +34,11 @@ const client = new MongoClient(uri, {
         strict: true,
         deprecationErrors: true,
     }
+});
+
+const serviceAccount = require("./etuitionbd-fb-key.json");
+admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount)
 });
 
 async function run() {
@@ -31,12 +53,24 @@ async function run() {
         const appliedTuitions = db.collection('applied_tuitions');
         const allPayments = db.collection('all_payments');
 
+        const verifyAdmin = async (req, res, next) => {
+            const email = req.decodedEmail
+            const query = { email }
+            const user = await allUsers.findOne(query)
+
+            if (!user || user.role !== 'Admin') {
+                return res.status(403).send({ messege: 'Forbidden Access' })
+            }
+
+            next()
+        }
+
         // -----Routes----- //
 
         // ---Tuitions Releted Apis--- //
 
         // Get all tuitions
-        app.get('/tuitions', async (req, res) => {
+        app.get('/tuitions', verifyFbToken, verifyAdmin, async (req, res) => {
             try {
                 const result = await allTuitions.find().toArray()
                 res.send(result)
@@ -49,7 +83,19 @@ async function run() {
         // Get tuitions status 
         app.get('/tuitions/approved', async (req, res) => {
             try {
-                const result = await allTuitions.find({ status: 'Approved' }).toArray()
+                const { limit = 0, search = '', subject = '', region = '', sortBy = 'newest' } = req.query
+                const query = {
+                    status: 'Approved',
+                    ...(search && {
+                        title: { $regex: search, $options: 'i' }
+                    }),
+                    ...(subject && { subject: subject }),
+                    ...(region && { location: region }),
+                };
+
+                const sortOrder = sortBy === 'newest' ? 1 : -1;
+
+                const result = await allTuitions.find(query).sort({ posted: sortOrder }).limit(Number(limit)).toArray()
                 res.send(result)
             }
             catch {
@@ -68,7 +114,7 @@ async function run() {
         })
 
         // Post tuition
-        app.post('/tuitions', async (req, res) => {
+        app.post('/tuitions', verifyFbToken, async (req, res) => {
             try {
                 const tuition = req.body
                 const result = await allTuitions.insertOne(tuition)
@@ -80,7 +126,7 @@ async function run() {
         })
 
         // Get tuition by email
-        app.get('/my-tuitions', async (req, res) => {
+        app.get('/my-tuitions', verifyFbToken, async (req, res) => {
             try {
                 const { email } = req.query
                 const result = await allTuitions.find({ "postedBy.email": email }).toArray()
@@ -92,7 +138,7 @@ async function run() {
         })
 
         // Delete tuition
-        app.delete('/tuitions/:id', async (req, res) => {
+        app.delete('/tuitions/:id', verifyFbToken, async (req, res) => {
             try {
                 const { id } = req.params
                 const result = await allTuitions.deleteOne({ _id: new ObjectId(id) })
@@ -104,7 +150,7 @@ async function run() {
         })
 
         // Update tuition
-        app.patch('/tuitions/:id', async (req, res) => {
+        app.patch('/tuitions/:id', verifyFbToken, async (req, res) => {
             try {
                 const id = req.params.id
                 const data = req.body
@@ -141,7 +187,8 @@ async function run() {
         // Get all tutors
         app.get('/tutors', async (req, res) => {
             try {
-                const result = await allTutors.find().project({ email: 0, about: 0, education: 0 }).toArray()
+                const { limit = 0 } = req.query
+                const result = await allTutors.find().project({ email: 0, about: 0, education: 0 }).limit(Number(limit)).toArray()
                 res.send(result)
             }
             catch {
@@ -162,7 +209,7 @@ async function run() {
         })
 
         // Applied tuitions
-        app.post('/applied-tuition', async (req, res) => {
+        app.post('/applied-tuition', verifyFbToken, async (req, res) => {
             try {
                 const tutor = req.body
                 const query = { email: tutor.email, tuitionId: tutor.tuitionId }
@@ -185,7 +232,7 @@ async function run() {
         })
 
         // Check if tutor already applied
-        app.get('/applied-tuition/check', async (req, res) => {
+        app.get('/applied-tuition/check', verifyFbToken, async (req, res) => {
             try {
                 const { email, tuitionId } = req.query
                 const exist = await appliedTuitions.findOne({ email, tuitionId })
@@ -197,7 +244,7 @@ async function run() {
         })
 
         // Get application by email
-        app.get('/applied-tuition', async (req, res) => {
+        app.get('/applied-tuition', verifyFbToken, async (req, res) => {
             try {
                 const { email } = req.query
                 const result = await appliedTuitions.find({ email: email }).toArray()
@@ -209,7 +256,7 @@ async function run() {
         })
 
         // Delete application
-        app.delete('/applied-tuition/:id', async (req, res) => {
+        app.delete('/applied-tuition/:id', verifyFbToken, async (req, res) => {
             try {
                 const { id } = req.params
                 const result = await appliedTuitions.deleteOne({ _id: new ObjectId(id) })
@@ -221,7 +268,7 @@ async function run() {
         })
 
         // Update application
-        app.patch('/applied-tuition/:id', async (req, res) => {
+        app.patch('/applied-tuition/:id', verifyFbToken, async (req, res) => {
             try {
                 const { id } = req.params
                 const query = { _id: new ObjectId(id) }
@@ -239,7 +286,7 @@ async function run() {
         })
 
         // Get tutor application by students post
-        app.get('/applied-tuition/student', async (req, res) => {
+        app.get('/applied-tuition/student', verifyFbToken, async (req, res) => {
             try {
                 const { studentEmail } = req.query
                 const result = await appliedTuitions.find({ studentEmail: studentEmail }).toArray()
@@ -295,7 +342,7 @@ async function run() {
         })
 
         // Get user by their email
-        app.get('/users/:email', async (req, res) => {
+        app.get('/users/:email', verifyFbToken, async (req, res) => {
             try {
                 const { email } = req.params
                 const result = await allUsers.findOne({ email })
@@ -307,7 +354,7 @@ async function run() {
         })
 
         // Update user info
-        app.patch('/users/:id', async (req, res) => {
+        app.patch('/users/:id', verifyFbToken, async (req, res) => {
             try {
                 const { id } = req.params
                 const newInfo = req.body
@@ -325,9 +372,19 @@ async function run() {
         })
 
         // Delete profile
-        app.delete('/users/:id', async (req, res) => {
+        app.delete('/users/:id', verifyFbToken, async (req, res) => {
             try {
                 const { id } = req.params
+                const user = await allUsers.findOne({ _id: new ObjectId(id) });
+
+                if (user.role === 'Admin') {
+                    return res.status(403).send({ message: 'Admin cannot be deleted' });
+                }
+
+                if (user.uid) {
+                    await admin.auth().deleteUser(user.uid);
+                }
+
                 const result = await allUsers.deleteOne({ _id: new ObjectId(id) })
                 res.send(result)
             }
@@ -337,7 +394,7 @@ async function run() {
         })
 
         // Get all users
-        app.get('/users', async (req, res) => {
+        app.get('/users', verifyFbToken, async (req, res) => {
             try {
                 const result = await allUsers.find().toArray()
                 res.send(result)
@@ -348,7 +405,7 @@ async function run() {
         })
 
         // Update role
-        app.patch('/users/role/:id', async (req, res) => {
+        app.patch('/users/role/:id', verifyFbToken, async (req, res) => {
             const { role } = req.body
             // console.log(role);
             try {
@@ -369,7 +426,7 @@ async function run() {
         // ---Payment releted api's--- //
 
         // fire payment
-        app.post('/create-checkout-session', async (req, res) => {
+        app.post('/create-checkout-session', verifyFbToken, async (req, res) => {
             const paymentInfo = req.body
             // console.log(paymentInfo);
 
@@ -403,7 +460,7 @@ async function run() {
         })
 
         // If payment success
-        app.patch('/payment-success', async (req, res) => {
+        app.patch('/payment-success', verifyFbToken, async (req, res) => {
             const { session_id } = req.query
             const session = await stripe.checkout.sessions.retrieve(session_id);
             // console.log(session);
