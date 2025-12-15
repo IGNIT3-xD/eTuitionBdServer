@@ -514,14 +514,113 @@ async function run() {
             }
         })
 
+        app.get('/recent-payment', verifyFbToken, async (req, res) => {
+            try {
+                const result = await allPayments.find().sort({ paidAt: -1 }).toArray()
+                res.send(result)
+            }
+            catch {
+                res.status(400).send({ message: 'Failed to get payment data' })
+            }
+        })
+
+        // Get payment by tutor email
+        app.get('/tutor-payment', async (req, res) => {
+            try {
+                const { email } = req.query
+                const result = await allPayments.find({ tutorEmail: email }).toArray()
+                res.send(result)
+            }
+            catch {
+                res.status(400).send({ message: 'Failed to get payment data' })
+            }
+        })
+
         // Get tutor by tutor email
-        app.get('/ongoing-tuitions', async (req, res) => {
+        app.get('/ongoing-tuitions', verifyFbToken, async (req, res) => {
             try {
                 const { email } = req.query
                 const result = await allPayments.find({ tutorEmail: email }).toArray()
                 res.send(result)
             } catch {
                 res.status(400).send({ message: 'Failed to get ongoing tuitions data' })
+            }
+        })
+
+        // Stats
+        app.get('/admin/stats', verifyFbToken, async (req, res) => {
+            try {
+                // Get Active Tuitions count
+                const activeTuitions = await allTuitions.countDocuments({
+                    status: 'Approved'
+                });
+
+                // Get Total Tutors count
+                const totalTutors = await allTutors.countDocuments(); // or add filter if needed
+
+                // Get Pending Tutors count (waiting for approval)
+                const approveTutors = await allTutors.countDocuments({
+                    status: 'pending' // adjust based on your approval field
+                });
+
+                // Calculate Total Revenue from payments collection
+                const revenueResult = await allPayments.aggregate([
+                    {
+                        $match: {
+                            paymentStatus: 'paid' // Only count successful payments
+                        }
+                    },
+                    {
+                        $group: {
+                            _id: null,
+                            totalRevenue: { $sum: "$amount" }
+                        }
+                    }
+                ]).toArray();
+
+                const revenue = revenueResult.length > 0 ? revenueResult[0].totalRevenue : 0;
+
+                // Return all stats
+                res.send({
+                    activeTuitions,
+                    totalTutors,
+                    approveTutors,
+                    revenue: Math.round(revenue) // Round to nearest integer
+                });
+
+            } catch (error) {
+                console.error('Error fetching admin stats:', error);
+                res.status(500).send({ message: 'Failed to fetch admin statistics' });
+            }
+        });
+
+        app.get('/tutor/stats', verifyFbToken, async (req, res) => {
+            try {
+                const { email } = req.query
+                // Total tuitions
+                const onGoingTuitions = await allPayments.countDocuments({ tutorEmail: email })
+
+                // Total applications
+                const totalApplications = await appliedTuitions.countDocuments({ email: email })
+
+                // Total earning
+                const totalEarning = await allPayments.aggregate([
+                    {
+                        $match: { paymentStatus: 'paid', tutorEmail: email }
+                    },
+                    {
+                        $group: {
+                            _id: null,
+                            totalRevenue: { $sum: "$amount" }
+                        }
+                    }
+                ]).toArray()
+                const revenue = totalEarning.length > 0 ? totalEarning[0].totalRevenue : 0;
+
+                res.send({ onGoingTuitions, totalApplications, revenue })
+            }
+            catch {
+                res.status(400).send({ message: 'Failed to get tutor stats' })
             }
         })
 
