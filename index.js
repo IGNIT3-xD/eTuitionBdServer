@@ -383,16 +383,6 @@ async function run() {
         app.delete('/users/:id', verifyFbToken, async (req, res) => {
             try {
                 const { id } = req.params
-                const user = await allUsers.findOne({ _id: new ObjectId(id) });
-
-                if (user.role === 'Admin') {
-                    return res.status(403).send({ message: 'Admin cannot be deleted' });
-                }
-
-                if (user.uid) {
-                    await admin.auth().deleteUser(user.uid);
-                }
-
                 const result = await allUsers.deleteOne({ _id: new ObjectId(id) })
                 res.send(result)
             }
