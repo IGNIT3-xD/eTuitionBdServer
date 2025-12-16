@@ -83,7 +83,7 @@ async function run() {
         // Get tuitions status 
         app.get('/tuitions/approved', async (req, res) => {
             try {
-                const { limit = 0, search = '', subject = '', region = '', sortBy = 'newest' } = req.query
+                const { limit = 0, skip = 0, search = '', subject = '', region = '', sortBy = 'newest' } = req.query
                 const query = {
                     status: 'Approved',
                     ...(search && {
@@ -95,8 +95,14 @@ async function run() {
 
                 const sortOrder = sortBy === 'newest' ? 1 : -1;
 
-                const result = await allTuitions.find(query).sort({ posted: sortOrder }).limit(Number(limit)).toArray()
-                res.send(result)
+                const result = await allTuitions.find(query)
+                    .sort({ posted: sortOrder })
+                    .limit(Number(limit))
+                    .skip(Number(skip))
+                    .toArray()
+
+                const count = await allTuitions.countDocuments(query)
+                res.send({result, count})
             }
             catch {
                 res.status(500).send({ message: 'Failed to get tuitions status data' });
